@@ -1,0 +1,118 @@
+
+__kernel void GMEMD_gradient(__global float *data, __global float *diff, __global float *direct,
+						__global int *list_x, __global int *list_y, __global float *list_deg,
+						int list_len, int width, int height) {
+	//kernel index
+	int x=get_global_id(0); //x
+	int y=get_global_id(1); //y
+
+	if(x<height && y<width){
+		//init variable
+		float pos_avg=0,neg_avg=0;
+		int pos_count=0,neg_count=0,weight=0,start,end,max_weight=0,max_token;
+		int tx,ty;
+		float current,target;
+		current=data[y*width+x];
+		start=list_len*3/4;
+		end=list_len/4;
+		
+		//init direct weight
+		for(int i=0;i<end;++i){
+			tx=x+list_x[i];
+			ty=y+list_y[i];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				target=data[ty*width+tx];
+				if(target > current) ++weight;
+			}
+		}
+		for(int i=start;i<list_len;++i){
+			tx=x+list_x[i];
+			ty=y+list_y[i];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				target=data[ty*width+tx];
+				if(target > current) ++weight;
+			}
+		}
+		
+		//calc direct
+		for(int i=0;i<list_len;++i){
+			start=(start+1)%list_len;
+			end=(end+1)%list_len;
+			tx=x+list_x[start];
+			ty=y+list_y[start];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				target=data[ty*width+tx];
+				if(target > current){ --weight; }
+			}
+			tx=x+list_x[end];
+			ty=y+list_y[end];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				target=data[ty*width+tx];
+				if(target > current){ ++weight; }
+			}
+			//if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				if(weight>max_weight){
+					max_token=i;
+					max_weight=weight;
+				}
+				else if(weight==max_weight){
+					target=data[(y+list_y[max_token])*width+(x+list_x[max_token])];
+					if(target < current){
+						max_token=i;
+					}
+				}
+			//}
+			
+		}
+		
+		//calc diff
+		for(int i=0;i<list_len;++i){
+			tx=x+list_x[i];
+			ty=y+list_y[i];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				target=data[ty*width+tx];
+				if(target > current){
+					pos_avg+=target;
+					++pos_count;
+				}
+				else{
+					neg_avg+=target;
+					++neg_count;
+				}
+			}
+		}
+		
+		//diff finish
+		if(pos_count){ pos_avg/=(float)pos_count; }
+		else{ pos_avg=current; }
+		if(neg_count){ neg_avg/=(float)neg_count; }
+		else{ neg_avg=current; }
+		diff[y*width+x]=pos_avg-neg_avg;
+	
+		//direct finish
+		direct[y*width+x]=list_deg[max_token];
+	}
+}
+
+
+__kernel void GMEMD_integral(__global float *result, __global float *diff, __global float *direct,
+                        __global int *list_x, __global int *list_y, __global float *list_deg,
+						int list_len, int width, int height) {
+	
+	//kernel index
+	int x=get_global_id(0); //x
+	int y=get_global_id(1); //y
+	
+	if(x<height && y<width){
+		int tx,ty;
+		result[y*width+x]=0;
+		for(int i=0;i<list_len;++i){
+			tx=x+list_x[i];
+			ty=y+list_y[i];
+			if( (tx>=0 && tx<height) && (ty>=0 && ty<width) ){
+				result[y*width+x]-=cos(direct[ty*width+tx]-list_deg[i])*diff[ty*width+tx];
+			}
+		}
+	}
+}
+

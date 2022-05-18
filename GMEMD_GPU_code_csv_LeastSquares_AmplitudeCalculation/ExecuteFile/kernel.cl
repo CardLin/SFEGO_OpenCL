@@ -61,8 +61,20 @@ __kernel void GMEMD_gradient(__global float *data, __global float *diff, __globa
 				max_weight=weight;
 			}
 			else if(weight==max_weight){
-				starget=data[(y+list_y[max_token])*width+(x+list_x[max_token])];
-				etarget=data[(y+list_y[mid])*width+(x+list_x[mid])];
+				tx=x+list_x[max_token];
+				ty=y+list_y[max_token];
+				if( (tx>=0 && tx<width) && (ty>=0 && ty<height) ){
+					starget=data[ty*width+tx];
+				}
+				else starget=0;
+				
+				tx=x+list_x[mid];
+				ty=y+list_y[mid];
+				if( (tx>=0 && tx<width) && (ty>=0 && ty<height) ){
+					etarget=data[ty*width+tx];
+				}
+				else etarget=0;
+				
 				if(starget < etarget){
 					max_token=mid;
 				}
